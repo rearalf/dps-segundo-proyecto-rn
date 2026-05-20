@@ -11,6 +11,8 @@ expo-env.d.ts
 .claude/
 AGENTS.md
 CLAUDE.md
+google-services.json
+FirebasConfig.ts
 
 # Native
 .kotlin/
