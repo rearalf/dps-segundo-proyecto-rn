@@ -14,15 +14,44 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { CustomInput } from "@/components/";
 import signUpStyles from "@/styles/signUpStyles";
 
+import { auth, db } from "@/services/firebase";
+
+import { createUserWithEmailAndPassword } from "firebase/auth";
+
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+
 function SignUpScreen() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState<number | null>(null);
 
-  function handleSignUp() {
-    if (!name || !email || !password) return;
-    router.replace("/dashboard");
+  async function handleSignUp() {
+    try {
+      if (!name || !email || !password || !role) {
+        return;
+      }
+
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password,
+      );
+
+      const user = userCredential.user;
+
+      await setDoc(doc(db, "users", user.uid), {
+        name,
+        email,
+        role,
+        createdAt: serverTimestamp(),
+      });
+
+      router.replace("/dashboard");
+    } catch (error) {
+      console.log(error);
+    }
   }
 
   return (
@@ -97,6 +126,48 @@ function SignUpScreen() {
                 secureTextEntry
                 autoCapitalize="none"
               />
+
+              <View style={signUpStyles.selectGroup}>
+                <Text style={signUpStyles.selectLabel}>
+                  Quiero registrarme como...
+                </Text>
+
+                <View style={signUpStyles.roleSwitch}>
+                  <TouchableOpacity
+                    style={[
+                      signUpStyles.roleOption,
+                      role === 1 && signUpStyles.roleOptionActive,
+                    ]}
+                    onPress={() => setRole(1)}
+                  >
+                    <Text
+                      style={[
+                        signUpStyles.roleText,
+                        role === 1 && signUpStyles.roleTextActive,
+                      ]}
+                    >
+                      Organizador
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      signUpStyles.roleOption,
+                      role === 2 && signUpStyles.roleOptionActive,
+                    ]}
+                    onPress={() => setRole(2)}
+                  >
+                    <Text
+                      style={[
+                        signUpStyles.roleText,
+                        role === 2 && signUpStyles.roleTextActive,
+                      ]}
+                    >
+                      Participante
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
 
               <TouchableOpacity
                 style={signUpStyles.button}

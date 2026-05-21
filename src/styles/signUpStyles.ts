@@ -109,6 +109,42 @@ const signUpStyles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 14,
   },
+  roleSwitch: {
+    flexDirection: "row",
+    backgroundColor: palette.primarySoft,
+    borderRadius: 999,
+    padding: 4,
+    gap: 4,
+  },
+
+  roleOption: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+
+  roleOptionActive: {
+    backgroundColor: palette.primary,
+  },
+
+  roleText: {
+    color: palette.text,
+    fontWeight: "700",
+  },
+
+  roleTextActive: {
+    color: "#FFFFFF",
+  },
+  selectGroup: {
+    gap: Spacing.one,
+  },
+
+  selectLabel: {
+    color: palette.text,
+    fontSize: 14,
+    fontWeight: "600",
+  },
 });
 
 export default signUpStyles;

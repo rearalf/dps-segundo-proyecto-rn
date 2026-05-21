@@ -13,6 +13,7 @@ AGENTS.md
 CLAUDE.md
 google-services.json
 FirebasConfig.ts
+src/services/firebase.ts
 
 # Native
 .kotlin/
