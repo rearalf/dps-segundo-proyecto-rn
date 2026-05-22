@@ -1,6 +1,7 @@
-import { Link, useRouter } from "expo-router";
-import React, { useState } from "react";
+import { Link } from "expo-router";
+import React from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,17 +13,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CustomInput } from "@/components/";
+import useSignIn from "@/hooks/useSignIn";
 import signInStyles from "@/styles/signInStyles";
 
 function SignInScreen() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
-  function handleSignIn() {
-    if (!email || !password) return;
-    router.replace("/dashboard");
-  }
+  const { email, loading, password, setEmail, setPassword, handleSignIn } =
+    useSignIn();
 
   return (
     <KeyboardAvoidingView
@@ -98,7 +94,11 @@ function SignInScreen() {
                 onPress={handleSignIn}
                 activeOpacity={0.9}
               >
-                <Text style={signInStyles.buttonText}>Login</Text>
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={signInStyles.buttonText}>Login</Text>
+                )}
               </TouchableOpacity>
             </View>
 

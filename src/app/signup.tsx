@@ -1,4 +1,6 @@
 import { Link, useRouter } from "expo-router";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import React, { useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -12,16 +14,15 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CustomInput } from "@/components/";
-import signUpStyles from "@/styles/signUpStyles";
-
 import { auth, db } from "@/services/firebase";
-
-import { createUserWithEmailAndPassword } from "firebase/auth";
-
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import useAuthSessionStore from "@/store/useAuthSessionStore";
+import signUpStyles from "@/styles/signUpStyles";
 
 function SignUpScreen() {
   const router = useRouter();
+  const setSessionUser = useAuthSessionStore((state) => state.setSessionUser);
+
+  const [loading, setLoading] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,17 +30,22 @@ function SignUpScreen() {
 
   async function handleSignUp() {
     try {
+      setLoading(true);
       if (!name || !email || !password || !role) {
         return;
       }
 
       const userCredential = await createUserWithEmailAndPassword(
         auth,
-        email,
+        email.trim(),
         password,
       );
 
       const user = userCredential.user;
+
+      await updateProfile(user, {
+        displayName: name.trim(),
+      });
 
       await setDoc(doc(db, "users", user.uid), {
         name,
@@ -48,9 +54,17 @@ function SignUpScreen() {
         createdAt: serverTimestamp(),
       });
 
+      setSessionUser({
+        uid: user.uid,
+        email: user.email ?? email.trim(),
+        displayName: name.trim(),
+      });
+
       router.replace("/dashboard");
     } catch (error) {
       console.log(error);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -88,6 +102,7 @@ function SignUpScreen() {
                     signUpStyles.switchOption,
                     signUpStyles.switchOptionActive,
                   ]}
+                  disabled={loading}
                 >
                   <Text
                     style={[
