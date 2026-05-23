@@ -12,7 +12,7 @@ type AuthSessionState = {
   user: SessionUser | null;
   isHydrated: boolean;
   setHydrated: (isHydrated: boolean) => void;
-  setSessionUser: (user: SessionUser | null) => void;
+  setSessionUser: (user: (SessionUser & { role: number }) | null) => void;
   setSessionFromFirebaseUser: (user: User | null) => void;
   clearSession: () => void;
 };

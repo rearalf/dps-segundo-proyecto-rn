@@ -17,8 +17,15 @@ import useSignIn from "@/hooks/useSignIn";
 import signInStyles from "@/styles/signInStyles";
 
 function SignInScreen() {
-  const { email, loading, password, setEmail, setPassword, handleSignIn } =
-    useSignIn();
+  const {
+    email,
+    error,
+    loading,
+    password,
+    setEmail,
+    setPassword,
+    handleSignIn,
+  } = useSignIn();
 
   return (
     <KeyboardAvoidingView
@@ -85,9 +92,11 @@ function SignInScreen() {
                 autoCapitalize="none"
               />
 
-              {/* <Pressable>
-                <Text style={signInStyles.forgot}>Olvide mi password</Text>
-              </Pressable> */}
+              {error ? (
+                <View style={signInStyles.errorContainer}>
+                  <Text style={signInStyles.errorText}>{error}</Text>
+                </View>
+              ) : null}
 
               <TouchableOpacity
                 style={signInStyles.button}
