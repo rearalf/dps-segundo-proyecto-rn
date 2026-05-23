@@ -114,6 +114,17 @@ const signInStyles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 14,
   },
+  errorContainer: {
+    backgroundColor: "#FEE2E2",
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 15,
+  },
+  errorText: {
+    color: "#DC2626",
+    textAlign: "center",
+    fontSize: 14,
+  },
 });
 
 export default signInStyles;
