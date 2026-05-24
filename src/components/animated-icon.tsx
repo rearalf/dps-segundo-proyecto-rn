@@ -1,4 +1,4 @@
-import { Image } from 'expo-image';
+/*import { Image } from 'expo-image';
 import { useState } from 'react';
 import { Dimensions, StyleSheet, View } from 'react-native';
 import Animated, { Easing, Keyframe } from 'react-native-reanimated';
@@ -130,3 +130,10 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
 });
+*/
+
+export function AnimatedSplashOverlay() {
+  return null;
+}
+
+export default AnimatedSplashOverlay;
