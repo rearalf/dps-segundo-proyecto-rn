@@ -1,12 +1,20 @@
+import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   addDoc,
+  arrayRemove,
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
+  onSnapshot,
+  orderBy,
+  query,
   updateDoc,
 } from "firebase/firestore";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,20 +30,13 @@ import { db } from "@/services/firebase";
 import useAuthSessionStore from "@/store/useAuthSessionStore";
 
 const eventsCollection = collection(db, "events");
+const commentsCollection = collection(db, "comments");
 
-const resolveIsPast = (date: string, status: string) => {
-  if (status === "Evento pasado") {
-    return true;
-  }
-
-  const eventDate = new Date(date);
-  if (Number.isNaN(eventDate.getTime())) {
-    return false;
-  }
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return eventDate < today;
+const resolveIsPast = (date: string, time: string, status: string) => {
+  if (status === "Evento pasado") return true;
+  const eventDate = new Date(`${date}T${time}:00`);
+  if (Number.isNaN(eventDate.getTime())) return false;
+  return eventDate < new Date();
 };
 
 const mapEvent = (
@@ -54,14 +55,17 @@ const mapEvent = (
       ? data.isPast
       : resolveIsPast(
           String(data.date ?? ""),
+          String(data.time ?? ""),
           String(data.status ?? "Abierto para inscripciones"),
         ),
+  attendees: Array.isArray(data.attendees) ? (data.attendees as string[]) : [],
 });
 
 export default function EventsTabScreen() {
   const user = useAuthSessionStore((state) => state.user);
 
   const [events, setEvents] = useState<IEventItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -69,22 +73,36 @@ export default function EventsTabScreen() {
   const [time, setTime] = useState("");
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
-  const [status, setStatus] = useState("Abierto para inscripciones");
+  const [attendingLoading, setAttendingLoading] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [dateObj, setDateObj] = useState(new Date());
+
+  // Modal de comentario
+  const [commentModalEvent, setCommentModalEvent] = useState<IEventItem | null>(null);
+  const [commentText, setCommentText] = useState("");
+  const [commentRating, setCommentRating] = useState(0);
+  const [submittingComment, setSubmittingComment] = useState(false);
+
+  useEffect(() => {
+    const q = query(eventsCollection, orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const loaded = snapshot.docs.map((d) =>
+        mapEvent(d.id, d.data() as Record<string, unknown>),
+      );
+      setEvents(loaded);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const selectedEvent = useMemo(
-    () => events.find((event) => event.id === selectedEventId) ?? events[0],
+    () => events.find((e) => e.id === selectedEventId) ?? events[0],
     [events, selectedEventId],
   );
 
-  const upcomingEvents = events.filter((event) => !event.isPast);
-  const pastEvents = events.filter((event) => event.isPast);
-
-  const statusOptions = [
-    "Abierto para inscripciones",
-    "En seguimiento",
-    "Requiere confirmacion",
-    "Evento pasado",
-  ];
+  const upcomingEvents = events.filter((e) => !e.isPast);
+  const pastEvents = events.filter((e) => e.isPast);
 
   const fillForm = (event: IEventItem) => {
     setEditingId(event.id);
@@ -94,7 +112,6 @@ export default function EventsTabScreen() {
     setTime(event.time);
     setLocation(event.location);
     setDescription(event.description);
-    setStatus(event.status);
   };
 
   const resetForm = () => {
@@ -104,15 +121,11 @@ export default function EventsTabScreen() {
     setTime("");
     setLocation("");
     setDescription("");
-    setStatus("Abierto para inscripciones");
   };
 
   const handleSubmit = async () => {
-    if (!title.trim() || !date.trim() || !time.trim() || !location.trim()) {
-      return;
-    }
-
-    const normalizedIsPast = resolveIsPast(date.trim(), status);
+    if (!title.trim() || !date.trim() || !time.trim() || !location.trim()) return;
+    const normalizedIsPast = resolveIsPast(date.trim(), time.trim(), "Abierto para inscripciones");
 
     if (editingId) {
       await updateDoc(doc(db, "events", editingId), {
@@ -121,7 +134,6 @@ export default function EventsTabScreen() {
         time: time.trim(),
         location: location.trim(),
         description: description.trim(),
-        status,
         isPast: normalizedIsPast,
         updatedAt: Date.now(),
       });
@@ -132,44 +144,87 @@ export default function EventsTabScreen() {
         time: time.trim(),
         location: location.trim(),
         description: description.trim(),
-        // status,
         isPast: normalizedIsPast,
+        attendees: [],
         user: user?.uid,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
-
       setSelectedEventId(eventRef.id);
     }
-
     resetForm();
   };
 
   const handleDelete = async (eventId: string) => {
     await deleteDoc(doc(db, "events", eventId));
+    if (editingId === eventId) resetForm();
+  };
 
-    if (editingId === eventId) {
-      resetForm();
+  const handleToggleAttendance = async (event: IEventItem) => {
+    if (!user?.uid) return;
+    setAttendingLoading(event.id);
+    const isAttending = event.attendees?.includes(user.uid);
+    await updateDoc(doc(db, "events", event.id), {
+      attendees: isAttending ? arrayRemove(user.uid) : arrayUnion(user.uid),
+    });
+    setAttendingLoading(null);
+  };
+
+  const handleDateChange = (_: any, selected?: Date) => {
+    setShowDatePicker(false);
+    if (selected) {
+      setDateObj(selected);
+      const yyyy = selected.getFullYear();
+      const mm = String(selected.getMonth() + 1).padStart(2, "0");
+      const dd = String(selected.getDate()).padStart(2, "0");
+      setDate(`${yyyy}-${mm}-${dd}`);
     }
   };
 
-  const openEventForDetails = (eventId: string) => {
-    setSelectedEventId(eventId);
+  const handleTimeChange = (_: any, selected?: Date) => {
+    setShowTimePicker(false);
+    if (selected) {
+      const hh = String(selected.getHours()).padStart(2, "0");
+      const min = String(selected.getMinutes()).padStart(2, "0");
+      setTime(`${hh}:${min}`);
+    }
   };
 
-  const manageActions = [
-    "Crear eventos con fecha, hora, ubicacion y descripcion.",
-    "Actualizar o eliminar eventos existentes.",
-    "Confirmar asistencia y enviar recordatorios.",
-  ];
+  const openCommentModal = (event: IEventItem) => {
+    setCommentModalEvent(event);
+    setCommentText("");
+    setCommentRating(0);
+  };
 
-  const selectedEventSummary = selectedEvent
-    ? `${selectedEvent.location} · ${selectedEvent.date} · ${selectedEvent.time}`
-    : "Selecciona un evento para ver su informacion";
+  const handleSubmitComment = async () => {
+    if (!commentText.trim() || commentRating === 0 || !commentModalEvent) return;
+    setSubmittingComment(true);
+    await addDoc(commentsCollection, {
+      eventId: commentModalEvent.id,
+      eventTitle: commentModalEvent.title,
+      userId: user?.uid,
+      user: user?.displayName || user?.email || "Anonimo",
+      comment: commentText.trim(),
+      rating: commentRating,
+      createdAt: Date.now(),
+    });
+    setSubmittingComment(false);
+    setCommentModalEvent(null);
+  };
 
-  const selectedEventDescription = selectedEvent?.description
-    ? selectedEvent.description
-    : "Aqui veras el resumen de participacion, estado y acciones del evento.";
+  const renderStars = (count: number, interactive = false) => (
+    <View style={styles.starsRow}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Pressable
+          key={star}
+          onPress={() => interactive && setCommentRating(star)}
+          disabled={!interactive}
+        >
+          <Text style={[styles.star, star <= count && styles.starActive]}>★</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -177,24 +232,7 @@ export default function EventsTabScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* <View style={styles.hero}>
-          <Text style={styles.kicker}>GESTION DE EVENTOS</Text>
-          <Text style={styles.title}>Crear, editar y controlar eventos</Text>
-          <Text style={styles.subtitle}>
-            Centraliza el ciclo completo de tus eventos y deja claras las
-            acciones del organizador.
-          </Text>
-        </View> */}
-
-        {/* <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Lo que cubre esta pestaña</Text>
-          {manageActions.map((item) => (
-            <Text key={item} style={styles.bullet}>
-              • {item}
-            </Text>
-          ))}
-        </View> */}
-
+        {/* Formulario */}
         <View style={styles.formCard}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
@@ -214,21 +252,42 @@ export default function EventsTabScreen() {
           />
 
           <View style={styles.row}>
-            <TextInput
-              placeholder="2026-06-05"
-              placeholderTextColor={palette.muted}
-              value={date}
-              onChangeText={setDate}
-              style={[styles.input, styles.rowInput]}
-            />
-            <TextInput
-              placeholder="18:00"
-              placeholderTextColor={palette.muted}
-              value={time}
-              onChangeText={setTime}
-              style={[styles.input, styles.rowInput]}
-            />
+            <Pressable
+              style={[styles.input, styles.rowInput, styles.pickerButton]}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Text style={date ? styles.pickerText : styles.pickerPlaceholder}>
+                {date || "Fecha"}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.input, styles.rowInput, styles.pickerButton]}
+              onPress={() => setShowTimePicker(true)}
+            >
+              <Text style={time ? styles.pickerText : styles.pickerPlaceholder}>
+                {time || "Hora"}
+              </Text>
+            </Pressable>
           </View>
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={dateObj}
+              mode="date"
+              display="default"
+              onChange={handleDateChange}
+              minimumDate={new Date()}
+            />
+          )}
+          {showTimePicker && (
+            <DateTimePicker
+              value={dateObj}
+              mode="time"
+              display="default"
+              onChange={handleTimeChange}
+              is24Hour={true}
+            />
+          )}
 
           <TextInput
             placeholder="Ubicacion"
@@ -237,7 +296,6 @@ export default function EventsTabScreen() {
             onChangeText={setLocation}
             style={styles.input}
           />
-
           <TextInput
             placeholder="Descripcion"
             placeholderTextColor={palette.muted}
@@ -247,176 +305,200 @@ export default function EventsTabScreen() {
             style={[styles.input, styles.textArea]}
           />
 
-          {/* <View style={styles.statusWrap}>
-            {statusOptions.map((option) => {
-              const isActive = status === option;
-
-              return (
-                <Pressable
-                  key={option}
-                  onPress={() => setStatus(option)}
-                  style={[
-                    styles.statusChip,
-                    isActive && styles.statusChipActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.statusChipText,
-                      isActive && styles.statusChipTextActive,
-                    ]}
-                  >
-                    {option}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View> */}
-
           <View style={styles.formActions}>
             <Pressable style={styles.primaryButton} onPress={handleSubmit}>
               <Text style={styles.primaryButtonText}>
                 {editingId ? "Guardar cambios" : "Crear evento"}
               </Text>
             </Pressable>
-
             <Pressable style={styles.secondaryButton} onPress={resetForm}>
               <Text style={styles.secondaryButtonText}>Limpiar</Text>
             </Pressable>
           </View>
         </View>
 
+        {/* Eventos próximos */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Eventos proximos</Text>
           <Text style={styles.sectionHint}>
-            Toca uno para ver detalles, editarlo o eliminarlo.
+            Toca uno para ver detalles, editarlo o confirmar asistencia.
           </Text>
         </View>
 
-        <View style={styles.list}>
-          {upcomingEvents.map((event) => (
-            <View key={event.id} style={styles.eventCard}>
-              <Text style={styles.eventStatus}>{event.status}</Text>
-              <Text style={styles.eventTitle}>{event.title}</Text>
-              <Text style={styles.eventDetail}>
-                {event.location} · {event.date} · {event.time}
-              </Text>
-              <Text style={styles.eventDetail}>{event.description}</Text>
+        {loading ? (
+          <ActivityIndicator color={palette.primary} />
+        ) : (
+          <View style={styles.list}>
+            {upcomingEvents.length === 0 && (
+              <Text style={styles.emptyText}>No hay eventos proximos.</Text>
+            )}
+            {upcomingEvents.map((event) => {
+              const isAttending = event.attendees?.includes(user?.uid ?? "");
+              const attendeeCount = event.attendees?.length ?? 0;
+              const isLoadingThis = attendingLoading === event.id;
 
-              <View style={styles.cardActions}>
-                <Pressable
-                  style={styles.cardAction}
-                  onPress={() => openEventForDetails(event.id)}
-                >
-                  <Text style={styles.cardActionText}>Ver</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.cardAction}
-                  onPress={() => fillForm(event)}
-                >
-                  <Text style={styles.cardActionText}>Editar</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.cardAction, styles.cardActionDanger]}
-                  onPress={() => handleDelete(event.id)}
-                >
-                  <Text
-                    style={[styles.cardActionText, styles.cardActionDangerText]}
-                  >
-                    Eliminar
+              return (
+                <View key={event.id} style={styles.eventCard}>
+                  <Text style={styles.eventTitle}>{event.title}</Text>
+                  <Text style={styles.eventDetail}>
+                    {event.location} · {event.date} · {event.time}
                   </Text>
-                </Pressable>
-              </View>
-            </View>
-          ))}
-        </View>
+                  {event.description ? (
+                    <Text style={styles.eventDetail}>{event.description}</Text>
+                  ) : null}
+                  <Text style={styles.attendeeCount}>
+                    {attendeeCount}{" "}
+                    {attendeeCount === 1 ? "persona confirmada" : "personas confirmadas"}
+                  </Text>
 
+                  <View style={styles.cardActions}>
+                    <Pressable
+                      style={[
+                        styles.attendButton,
+                        isAttending && styles.attendButtonActive,
+                      ]}
+                      onPress={() => handleToggleAttendance(event)}
+                      disabled={isLoadingThis}
+                    >
+                      {isLoadingThis ? (
+                        <ActivityIndicator
+                          color={isAttending ? "#fff" : palette.primary}
+                          size="small"
+                        />
+                      ) : (
+                        <Text
+                          style={[
+                            styles.attendButtonText,
+                            isAttending && styles.attendButtonTextActive,
+                          ]}
+                        >
+                          {isAttending ? "✓ Asistire" : "Confirmar asistencia"}
+                        </Text>
+                      )}
+                    </Pressable>
+                    <Pressable
+                      style={styles.cardAction}
+                      onPress={() => fillForm(event)}
+                    >
+                      <Text style={styles.cardActionText}>Editar</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.cardAction, styles.cardActionDanger]}
+                      onPress={() => handleDelete(event.id)}
+                    >
+                      <Text style={[styles.cardActionText, styles.cardActionDangerText]}>
+                        Eliminar
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Eventos pasados */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Eventos pasados</Text>
-          <Text style={styles.sectionHint}>Historial para consulta rapida</Text>
+          <Text style={styles.sectionHint}>
+            Puedes comentar los eventos a los que asististe.
+          </Text>
         </View>
 
         <View style={styles.list}>
-          {pastEvents.map((event) => (
-            <View key={event.id} style={styles.eventCard}>
-              <Text style={styles.eventStatus}>{event.status}</Text>
-              <Text style={styles.eventTitle}>{event.title}</Text>
-              <Text style={styles.eventDetail}>
-                {event.location} · {event.date} · {event.time}
-              </Text>
-              <Text style={styles.eventDetail}>{event.description}</Text>
-            </View>
-          ))}
+          {pastEvents.length === 0 && (
+            <Text style={styles.emptyText}>No hay eventos pasados.</Text>
+          )}
+          {pastEvents.map((event) => {
+            const attended = event.attendees?.includes(user?.uid ?? "");
+            return (
+              <View key={event.id} style={[styles.eventCard, styles.pastCard]}>
+                <Text style={styles.eventTitle}>{event.title}</Text>
+                <Text style={styles.eventDetail}>
+                  {event.location} · {event.date} · {event.time}
+                </Text>
+                <Text style={styles.attendeeCount}>
+                  {event.attendees?.length ?? 0} asistentes
+                </Text>
+                {attended && (
+                  <View style={styles.cardActions}>
+                    <Pressable
+                      style={styles.commentButton}
+                      onPress={() => openCommentModal(event)}
+                    >
+                      <Text style={styles.commentButtonText}>
+                        ✏️ Dejar comentario
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            );
+          })}
         </View>
-
-        <View style={styles.detailCard}>
-          <Text style={styles.sectionTitle}>Detalle del evento</Text>
-          <Text style={styles.detailTitle}>
-            {selectedEvent?.title ?? "Sin evento seleccionado"}
-          </Text>
-          <Text style={styles.detailMeta}>{selectedEventSummary}</Text>
-          <Text style={styles.detailDescription}>
-            {selectedEventDescription}
-          </Text>
-        </View>
-
-        {/* <View style={styles.participationCard}>
-          <Text style={styles.sectionTitle}>Participacion</Text>
-          <Text style={styles.sectionHint}>
-            Confirmacion de asistencia y recordatorios para los asistentes.
-          </Text>
-          <Text style={styles.bullet}>
-            • Los usuarios pueden confirmar su asistencia.
-          </Text>
-          <Text style={styles.bullet}>
-            • Se pueden enviar notificaciones de cambios o recordatorios.
-          </Text>
-        </View> */}
       </ScrollView>
+
+      {/* Modal de comentario */}
+      <Modal
+        visible={!!commentModalEvent}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCommentModalEvent(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Comentar evento</Text>
+            <Text style={styles.modalEventName}>
+              {commentModalEvent?.title}
+            </Text>
+
+            <Text style={styles.label}>Calificacion</Text>
+            {renderStars(commentRating, true)}
+            {commentRating === 0 && (
+              <Text style={styles.ratingHint}>Toca una estrella</Text>
+            )}
+
+            <TextInput
+              placeholder="Escribe tu comentario..."
+              placeholderTextColor={palette.muted}
+              value={commentText}
+              onChangeText={setCommentText}
+              multiline
+              style={[styles.input, styles.textArea]}
+            />
+
+            <View style={styles.formActions}>
+              <Pressable
+                style={[
+                  styles.primaryButton,
+                  (!commentText.trim() || commentRating === 0) && styles.primaryButtonDisabled,
+                ]}
+                onPress={handleSubmitComment}
+                disabled={submittingComment || !commentText.trim() || commentRating === 0}
+              >
+                {submittingComment ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Publicar</Text>
+                )}
+              </Pressable>
+              <Pressable
+                style={styles.secondaryButton}
+                onPress={() => setCommentModalEvent(null)}
+              >
+                <Text style={styles.secondaryButtonText}>Cancelar</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: palette.bg,
-  },
-  content: {
-    padding: Spacing.four,
-    gap: Spacing.three,
-  },
-  hero: {
-    backgroundColor: palette.surface,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: palette.line,
-    padding: Spacing.four,
-    gap: Spacing.one,
-  },
-  kicker: {
-    color: palette.primary,
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 1,
-  },
-  title: {
-    color: palette.text,
-    fontSize: 30,
-    lineHeight: 34,
-    fontWeight: "800",
-  },
-  subtitle: {
-    color: palette.muted,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  card: {
-    backgroundColor: palette.primarySoft,
-    borderRadius: 20,
-    padding: Spacing.four,
-    gap: Spacing.one,
-  },
+  container: { flex: 1, backgroundColor: palette.bg },
+  content: { padding: Spacing.four, gap: Spacing.three },
   formCard: {
     backgroundColor: palette.surface,
     borderRadius: 24,
@@ -425,23 +507,9 @@ const styles = StyleSheet.create({
     borderColor: palette.line,
     gap: Spacing.two,
   },
-  sectionTitle: {
-    color: palette.text,
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  bullet: {
-    color: palette.text,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  sectionHeader: {
-    gap: 2,
-  },
-  sectionHint: {
-    color: palette.muted,
-    fontSize: 13,
-  },
+  sectionTitle: { color: palette.text, fontSize: 18, fontWeight: "800" },
+  sectionHeader: { gap: 2 },
+  sectionHint: { color: palette.muted, fontSize: 13 },
   input: {
     backgroundColor: "#FFFFFF",
     borderColor: palette.line,
@@ -452,46 +520,10 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontSize: 14,
   },
-  textArea: {
-    minHeight: 96,
-    textAlignVertical: "top",
-  },
-  row: {
-    flexDirection: "row",
-    gap: Spacing.two,
-  },
-  rowInput: {
-    flex: 1,
-  },
-  statusWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  statusChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: palette.line,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: palette.primarySoft,
-  },
-  statusChipActive: {
-    backgroundColor: palette.primary,
-    borderColor: palette.primary,
-  },
-  statusChipText: {
-    color: palette.text,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  statusChipTextActive: {
-    color: "#FFFFFF",
-  },
-  formActions: {
-    flexDirection: "row",
-    gap: Spacing.two,
-  },
+  textArea: { minHeight: 96, textAlignVertical: "top" },
+  row: { flexDirection: "row", gap: Spacing.two },
+  rowInput: { flex: 1 },
+  formActions: { flexDirection: "row", gap: Spacing.two },
   primaryButton: {
     flex: 1,
     backgroundColor: palette.primary,
@@ -499,11 +531,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
   },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "800",
-  },
+  primaryButtonDisabled: { opacity: 0.5 },
+  primaryButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
   secondaryButton: {
     borderRadius: 999,
     borderWidth: 1,
@@ -513,88 +542,74 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: palette.primarySoft,
   },
-  secondaryButtonText: {
-    color: palette.text,
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  list: {
-    gap: Spacing.two,
-  },
+  secondaryButtonText: { color: palette.text, fontSize: 15, fontWeight: "800" },
+  list: { gap: Spacing.two },
+  emptyText: { color: palette.muted, fontSize: 14, textAlign: "center", paddingVertical: 12 },
   eventCard: {
     backgroundColor: palette.surface,
     borderRadius: 18,
     padding: Spacing.four,
     borderWidth: 1,
     borderColor: palette.line,
-    gap: 4,
+    gap: 6,
   },
-  eventStatus: {
-    color: palette.primary,
-    fontSize: 12,
-    fontWeight: "700",
-    textTransform: "uppercase",
+  pastCard: { opacity: 0.8 },
+  eventTitle: { color: palette.text, fontSize: 17, fontWeight: "700" },
+  eventDetail: { color: palette.muted, fontSize: 13, lineHeight: 18 },
+  attendeeCount: { color: palette.primary, fontSize: 12, fontWeight: "700", marginTop: 2 },
+  cardActions: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 8 },
+  attendButton: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1.5,
+    borderColor: palette.primary,
+    backgroundColor: "#fff",
+    minWidth: 60,
+    alignItems: "center",
   },
-  eventTitle: {
-    color: palette.text,
-    fontSize: 17,
-    fontWeight: "700",
-  },
-  eventDetail: {
-    color: palette.muted,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  cardActions: {
-    flexDirection: "row",
-    gap: 8,
-    flexWrap: "wrap",
-    marginTop: 8,
-  },
+  attendButtonActive: { backgroundColor: palette.primary },
+  attendButtonText: { color: palette.primary, fontSize: 12, fontWeight: "700" },
+  attendButtonTextActive: { color: "#fff" },
   cardAction: {
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: palette.primarySoft,
   },
-  cardActionText: {
-    color: palette.text,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  cardActionDanger: {
-    backgroundColor: "#F8E5E5",
-  },
-  cardActionDangerText: {
-    color: "#9A2F2F",
-  },
-  detailCard: {
-    backgroundColor: palette.surface,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: palette.line,
-    padding: Spacing.four,
-    gap: 6,
-  },
-  detailTitle: {
-    color: palette.text,
-    fontSize: 20,
-    fontWeight: "800",
-  },
-  detailMeta: {
-    color: palette.primary,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  detailDescription: {
-    color: palette.muted,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  participationCard: {
+  cardActionText: { color: palette.text, fontSize: 12, fontWeight: "700" },
+  cardActionDanger: { backgroundColor: "#F8E5E5" },
+  cardActionDangerText: { color: "#9A2F2F" },
+  commentButton: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1.5,
+    borderColor: palette.primary,
     backgroundColor: palette.primarySoft,
-    borderRadius: 24,
-    padding: Spacing.four,
-    gap: 4,
   },
+  commentButtonText: { color: palette.primary, fontSize: 12, fontWeight: "700" },
+  pickerButton: { justifyContent: "center" },
+  pickerText: { color: palette.text, fontSize: 14 },
+  pickerPlaceholder: { color: palette.muted, fontSize: 14 },
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalCard: {
+    backgroundColor: palette.bg,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: Spacing.four,
+    gap: Spacing.two,
+  },
+  modalTitle: { color: palette.text, fontSize: 20, fontWeight: "800" },
+  modalEventName: { color: palette.primary, fontSize: 14, fontWeight: "700" },
+  label: { color: palette.text, fontSize: 14, fontWeight: "600" },
+  starsRow: { flexDirection: "row", gap: 4 },
+  star: { fontSize: 28, color: palette.line },
+  starActive: { color: "#F5A623" },
+  ratingHint: { color: palette.muted, fontSize: 12 },
 });
