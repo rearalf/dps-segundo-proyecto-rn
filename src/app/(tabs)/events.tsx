@@ -1,3 +1,4 @@
+import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   addDoc,
   arrayRemove,
@@ -13,6 +14,7 @@ import {
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -26,8 +28,9 @@ import { palette, Spacing } from "@/constants/theme";
 import { IEventItem } from "@/interfaces/IEvents";
 import { db } from "@/services/firebase";
 import useAuthSessionStore from "@/store/useAuthSessionStore";
-import DateTimePicker from "@react-native-community/datetimepicker";
+
 const eventsCollection = collection(db, "events");
+const commentsCollection = collection(db, "comments");
 
 const resolveIsPast = (date: string, time: string, status: string) => {
   if (status === "Evento pasado") return true;
@@ -74,6 +77,12 @@ export default function EventsTabScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [dateObj, setDateObj] = useState(new Date());
+
+  // Modal de comentario
+  const [commentModalEvent, setCommentModalEvent] = useState<IEventItem | null>(null);
+  const [commentText, setCommentText] = useState("");
+  const [commentRating, setCommentRating] = useState(0);
+  const [submittingComment, setSubmittingComment] = useState(false);
 
   useEffect(() => {
     const q = query(eventsCollection, orderBy("createdAt", "desc"));
@@ -162,26 +171,60 @@ export default function EventsTabScreen() {
   };
 
   const handleDateChange = (_: any, selected?: Date) => {
-  setShowDatePicker(false);
-  if (selected) {
-    setDateObj(selected);
-    const yyyy = selected.getFullYear();
-    const mm = String(selected.getMonth() + 1).padStart(2, "0");
-    const dd = String(selected.getDate()).padStart(2, "0");
-    setDate(`${yyyy}-${mm}-${dd}`);
-  }
-};
+    setShowDatePicker(false);
+    if (selected) {
+      setDateObj(selected);
+      const yyyy = selected.getFullYear();
+      const mm = String(selected.getMonth() + 1).padStart(2, "0");
+      const dd = String(selected.getDate()).padStart(2, "0");
+      setDate(`${yyyy}-${mm}-${dd}`);
+    }
+  };
 
-const handleTimeChange = (_: any, selected?: Date) => {
-  setShowTimePicker(false);
-  if (selected) {
-    const hh = String(selected.getHours()).padStart(2, "0");
-    const min = String(selected.getMinutes()).padStart(2, "0");
-    setTime(`${hh}:${min}`);
-  }
-};
+  const handleTimeChange = (_: any, selected?: Date) => {
+    setShowTimePicker(false);
+    if (selected) {
+      const hh = String(selected.getHours()).padStart(2, "0");
+      const min = String(selected.getMinutes()).padStart(2, "0");
+      setTime(`${hh}:${min}`);
+    }
+  };
 
+  const openCommentModal = (event: IEventItem) => {
+    setCommentModalEvent(event);
+    setCommentText("");
+    setCommentRating(0);
+  };
 
+  const handleSubmitComment = async () => {
+    if (!commentText.trim() || commentRating === 0 || !commentModalEvent) return;
+    setSubmittingComment(true);
+    await addDoc(commentsCollection, {
+      eventId: commentModalEvent.id,
+      eventTitle: commentModalEvent.title,
+      userId: user?.uid,
+      user: user?.displayName || user?.email || "Anonimo",
+      comment: commentText.trim(),
+      rating: commentRating,
+      createdAt: Date.now(),
+    });
+    setSubmittingComment(false);
+    setCommentModalEvent(null);
+  };
+
+  const renderStars = (count: number, interactive = false) => (
+    <View style={styles.starsRow}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Pressable
+          key={star}
+          onPress={() => interactive && setCommentRating(star)}
+          disabled={!interactive}
+        >
+          <Text style={[styles.star, star <= count && styles.starActive]}>★</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -189,6 +232,7 @@ const handleTimeChange = (_: any, selected?: Date) => {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* Formulario */}
         <View style={styles.formCard}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
@@ -208,45 +252,42 @@ const handleTimeChange = (_: any, selected?: Date) => {
           />
 
           <View style={styles.row}>
-          <Pressable
-          style={[styles.input, styles.rowInput, styles.pickerButton]}
-          onPress={() => setShowDatePicker(true)}
-          >
-          <Text style={date ? styles.pickerText : styles.pickerPlaceholder}>
-          {date || "Fecha"}
-          </Text>
-          </Pressable>
-
-          <Pressable
-          style={[styles.input, styles.rowInput, styles.pickerButton]}
-          onPress={() => setShowTimePicker(true)}
-          >
-          <Text style={time ? styles.pickerText : styles.pickerPlaceholder}>
-          {time || "Hora"}
-          </Text>
-          </Pressable>
+            <Pressable
+              style={[styles.input, styles.rowInput, styles.pickerButton]}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Text style={date ? styles.pickerText : styles.pickerPlaceholder}>
+                {date || "Fecha"}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.input, styles.rowInput, styles.pickerButton]}
+              onPress={() => setShowTimePicker(true)}
+            >
+              <Text style={time ? styles.pickerText : styles.pickerPlaceholder}>
+                {time || "Hora"}
+              </Text>
+            </Pressable>
           </View>
 
           {showDatePicker && (
-          <DateTimePicker
-          value={dateObj}
-          mode="date"
-          display="default"
-          onChange={handleDateChange}
-          minimumDate={new Date()}
-          />
+            <DateTimePicker
+              value={dateObj}
+              mode="date"
+              display="default"
+              onChange={handleDateChange}
+              minimumDate={new Date()}
+            />
           )}
-
           {showTimePicker && (
-          <DateTimePicker
-          value={dateObj}
-          mode="time"
-          display="default"
-          onChange={handleTimeChange}
-          is24Hour={true}
-          />
+            <DateTimePicker
+              value={dateObj}
+              mode="time"
+              display="default"
+              onChange={handleTimeChange}
+              is24Hour={true}
+            />
           )}
-          
 
           <TextInput
             placeholder="Ubicacion"
@@ -276,6 +317,7 @@ const handleTimeChange = (_: any, selected?: Date) => {
           </View>
         </View>
 
+        {/* Eventos próximos */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Eventos proximos</Text>
           <Text style={styles.sectionHint}>
@@ -304,7 +346,6 @@ const handleTimeChange = (_: any, selected?: Date) => {
                   {event.description ? (
                     <Text style={styles.eventDetail}>{event.description}</Text>
                   ) : null}
-
                   <Text style={styles.attendeeCount}>
                     {attendeeCount}{" "}
                     {attendeeCount === 1 ? "persona confirmada" : "personas confirmadas"}
@@ -335,7 +376,6 @@ const handleTimeChange = (_: any, selected?: Date) => {
                         </Text>
                       )}
                     </Pressable>
-
                     <Pressable
                       style={styles.cardAction}
                       onPress={() => fillForm(event)}
@@ -357,28 +397,101 @@ const handleTimeChange = (_: any, selected?: Date) => {
           </View>
         )}
 
+        {/* Eventos pasados */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Eventos pasados</Text>
-          <Text style={styles.sectionHint}>Historial para consulta rapida</Text>
+          <Text style={styles.sectionHint}>
+            Puedes comentar los eventos a los que asististe.
+          </Text>
         </View>
 
         <View style={styles.list}>
           {pastEvents.length === 0 && (
             <Text style={styles.emptyText}>No hay eventos pasados.</Text>
           )}
-          {pastEvents.map((event) => (
-            <View key={event.id} style={[styles.eventCard, styles.pastCard]}>
-              <Text style={styles.eventTitle}>{event.title}</Text>
-              <Text style={styles.eventDetail}>
-                {event.location} · {event.date} · {event.time}
-              </Text>
-              <Text style={styles.attendeeCount}>
-                {event.attendees?.length ?? 0} asistentes
-              </Text>
-            </View>
-          ))}
+          {pastEvents.map((event) => {
+            const attended = event.attendees?.includes(user?.uid ?? "");
+            return (
+              <View key={event.id} style={[styles.eventCard, styles.pastCard]}>
+                <Text style={styles.eventTitle}>{event.title}</Text>
+                <Text style={styles.eventDetail}>
+                  {event.location} · {event.date} · {event.time}
+                </Text>
+                <Text style={styles.attendeeCount}>
+                  {event.attendees?.length ?? 0} asistentes
+                </Text>
+                {attended && (
+                  <View style={styles.cardActions}>
+                    <Pressable
+                      style={styles.commentButton}
+                      onPress={() => openCommentModal(event)}
+                    >
+                      <Text style={styles.commentButtonText}>
+                        ✏️ Dejar comentario
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            );
+          })}
         </View>
       </ScrollView>
+
+      {/* Modal de comentario */}
+      <Modal
+        visible={!!commentModalEvent}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCommentModalEvent(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Comentar evento</Text>
+            <Text style={styles.modalEventName}>
+              {commentModalEvent?.title}
+            </Text>
+
+            <Text style={styles.label}>Calificacion</Text>
+            {renderStars(commentRating, true)}
+            {commentRating === 0 && (
+              <Text style={styles.ratingHint}>Toca una estrella</Text>
+            )}
+
+            <TextInput
+              placeholder="Escribe tu comentario..."
+              placeholderTextColor={palette.muted}
+              value={commentText}
+              onChangeText={setCommentText}
+              multiline
+              style={[styles.input, styles.textArea]}
+            />
+
+            <View style={styles.formActions}>
+              <Pressable
+                style={[
+                  styles.primaryButton,
+                  (!commentText.trim() || commentRating === 0) && styles.primaryButtonDisabled,
+                ]}
+                onPress={handleSubmitComment}
+                disabled={submittingComment || !commentText.trim() || commentRating === 0}
+              >
+                {submittingComment ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Publicar</Text>
+                )}
+              </Pressable>
+              <Pressable
+                style={styles.secondaryButton}
+                onPress={() => setCommentModalEvent(null)}
+              >
+                <Text style={styles.secondaryButtonText}>Cancelar</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -418,6 +531,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
   },
+  primaryButtonDisabled: { opacity: 0.5 },
   primaryButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
   secondaryButton: {
     borderRadius: 999,
@@ -439,21 +553,11 @@ const styles = StyleSheet.create({
     borderColor: palette.line,
     gap: 6,
   },
-  pastCard: { opacity: 0.7 },
+  pastCard: { opacity: 0.8 },
   eventTitle: { color: palette.text, fontSize: 17, fontWeight: "700" },
   eventDetail: { color: palette.muted, fontSize: 13, lineHeight: 18 },
-  attendeeCount: {
-    color: palette.primary,
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 2,
-  },
-  cardActions: {
-    flexDirection: "row",
-    gap: 8,
-    flexWrap: "wrap",
-    marginTop: 8,
-  },
+  attendeeCount: { color: palette.primary, fontSize: 12, fontWeight: "700", marginTop: 2 },
+  cardActions: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 8 },
   attendButton: {
     borderRadius: 999,
     paddingHorizontal: 14,
@@ -476,16 +580,36 @@ const styles = StyleSheet.create({
   cardActionText: { color: palette.text, fontSize: 12, fontWeight: "700" },
   cardActionDanger: { backgroundColor: "#F8E5E5" },
   cardActionDangerText: { color: "#9A2F2F" },
-  
-  pickerButton: {
-  justifyContent: "center",
+  commentButton: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1.5,
+    borderColor: palette.primary,
+    backgroundColor: palette.primarySoft,
   },
-  pickerText: {
-  color: palette.text,
-  fontSize: 14,
+  commentButtonText: { color: palette.primary, fontSize: 12, fontWeight: "700" },
+  pickerButton: { justifyContent: "center" },
+  pickerText: { color: palette.text, fontSize: 14 },
+  pickerPlaceholder: { color: palette.muted, fontSize: 14 },
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
   },
-  pickerPlaceholder: {
-  color: palette.muted,
-  fontSize: 14,
-},
+  modalCard: {
+    backgroundColor: palette.bg,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: Spacing.four,
+    gap: Spacing.two,
+  },
+  modalTitle: { color: palette.text, fontSize: 20, fontWeight: "800" },
+  modalEventName: { color: palette.primary, fontSize: 14, fontWeight: "700" },
+  label: { color: palette.text, fontSize: 14, fontWeight: "600" },
+  starsRow: { flexDirection: "row", gap: 4 },
+  star: { fontSize: 28, color: palette.line },
+  starActive: { color: "#F5A623" },
+  ratingHint: { color: palette.muted, fontSize: 12 },
 });
