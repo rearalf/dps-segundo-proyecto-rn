@@ -1,23 +1,10 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
-import {
-  addDoc,
-  arrayRemove,
-  arrayUnion,
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  updateDoc,
-} from "firebase/firestore";
-import React, { useEffect, useMemo, useState } from "react";
+import React from "react";
 import {
   ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -26,216 +13,49 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { palette, Spacing } from "@/constants/theme";
-import { IEventItem } from "@/interfaces/IEvents";
-import { db } from "@/services/firebase";
-import useAuthSessionStore from "@/store/useAuthSessionStore";
-
-const eventsCollection = collection(db, "events");
-const commentsCollection = collection(db, "comments");
-
-const resolveIsPast = (date: string, time: string, status: string) => {
-  if (status === "Evento pasado") return true;
-  const eventDate = new Date(`${date}T${time}:00`);
-  if (Number.isNaN(eventDate.getTime())) return false;
-  return eventDate < new Date();
-};
-
-const mapEvent = (
-  eventId: string,
-  data: Record<string, unknown>,
-): IEventItem => ({
-  id: eventId,
-  title: String(data.title ?? ""),
-  date: String(data.date ?? ""),
-  time: String(data.time ?? ""),
-  location: String(data.location ?? ""),
-  description: String(data.description ?? ""),
-  status: String(data.status ?? "Abierto para inscripciones"),
-  isPast:
-    typeof data.isPast === "boolean"
-      ? data.isPast
-      : resolveIsPast(
-          String(data.date ?? ""),
-          String(data.time ?? ""),
-          String(data.status ?? "Abierto para inscripciones"),
-        ),
-  attendees: Array.isArray(data.attendees) ? (data.attendees as string[]) : [],
-});
+import useEvents from "@/hooks/useEvents";
 
 export default function EventsTabScreen() {
-  const user = useAuthSessionStore((state) => state.user);
-
-  const [events, setEvents] = useState<IEventItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedEventId, setSelectedEventId] = useState<string>("");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [location, setLocation] = useState("");
-  const [description, setDescription] = useState("");
-  const [attendingLoading, setAttendingLoading] = useState<string | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [dateObj, setDateObj] = useState(new Date());
-
-  // Modal de comentario
-  const [commentModalEvent, setCommentModalEvent] = useState<IEventItem | null>(
-    null,
-  );
-  const [commentText, setCommentText] = useState("");
-  const [commentRating, setCommentRating] = useState(0);
-  const [submittingComment, setSubmittingComment] = useState(false);
-
-  useEffect(() => {
-    const q = query(eventsCollection, orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const loaded = snapshot.docs.map((d) =>
-        mapEvent(d.id, d.data() as Record<string, unknown>),
-      );
-      setEvents(loaded);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  const selectedEvent = useMemo(
-    () => events.find((e) => e.id === selectedEventId) ?? events[0],
-    [events, selectedEventId],
-  );
-
-  const upcomingEvents = events.filter((e) => !e.isPast);
-  const pastEvents = events.filter((e) => e.isPast);
-
-  const fillForm = (event: IEventItem) => {
-    setEditingId(event.id);
-    setSelectedEventId(event.id);
-    setTitle(event.title);
-    setDate(event.date);
-    setTime(event.time);
-    setLocation(event.location);
-    setDescription(event.description);
-  };
-
-  const resetForm = () => {
-    setEditingId(null);
-    setTitle("");
-    setDate("");
-    setTime("");
-    setLocation("");
-    setDescription("");
-  };
-
-  const handleSubmit = async () => {
-    if (!title.trim() || !date.trim() || !time.trim() || !location.trim())
-      return;
-    const normalizedIsPast = resolveIsPast(
-      date.trim(),
-      time.trim(),
-      "Abierto para inscripciones",
-    );
-
-    if (editingId) {
-      await updateDoc(doc(db, "events", editingId), {
-        title: title.trim(),
-        date: date.trim(),
-        time: time.trim(),
-        location: location.trim(),
-        description: description.trim(),
-        isPast: normalizedIsPast,
-        updatedAt: Date.now(),
-      });
-    } else {
-      const eventRef = await addDoc(eventsCollection, {
-        title: title.trim(),
-        date: date.trim(),
-        time: time.trim(),
-        location: location.trim(),
-        description: description.trim(),
-        isPast: normalizedIsPast,
-        attendees: [],
-        user: user?.uid,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      });
-      setSelectedEventId(eventRef.id);
-    }
-    resetForm();
-  };
-
-  const handleDelete = async (eventId: string) => {
-    await deleteDoc(doc(db, "events", eventId));
-    if (editingId === eventId) resetForm();
-  };
-
-  const handleToggleAttendance = async (event: IEventItem) => {
-    if (!user?.uid) return;
-    setAttendingLoading(event.id);
-    const isAttending = event.attendees?.includes(user.uid);
-    await updateDoc(doc(db, "events", event.id), {
-      attendees: isAttending ? arrayRemove(user.uid) : arrayUnion(user.uid),
-    });
-    setAttendingLoading(null);
-  };
-
-  const handleDateChange = (_: any, selected?: Date) => {
-    setShowDatePicker(false);
-    if (selected) {
-      setDateObj(selected);
-      const yyyy = selected.getFullYear();
-      const mm = String(selected.getMonth() + 1).padStart(2, "0");
-      const dd = String(selected.getDate()).padStart(2, "0");
-      setDate(`${yyyy}-${mm}-${dd}`);
-    }
-  };
-
-  const handleTimeChange = (_: any, selected?: Date) => {
-    setShowTimePicker(false);
-    if (selected) {
-      const hh = String(selected.getHours()).padStart(2, "0");
-      const min = String(selected.getMinutes()).padStart(2, "0");
-      setTime(`${hh}:${min}`);
-    }
-  };
-
-  const openCommentModal = (event: IEventItem) => {
-    setCommentModalEvent(event);
-    setCommentText("");
-    setCommentRating(0);
-  };
-
-  const handleSubmitComment = async () => {
-    if (!commentText.trim() || commentRating === 0 || !commentModalEvent)
-      return;
-    setSubmittingComment(true);
-    await addDoc(commentsCollection, {
-      eventId: commentModalEvent.id,
-      eventTitle: commentModalEvent.title,
-      userId: user?.uid,
-      user: user?.displayName || user?.email || "Anonimo",
-      comment: commentText.trim(),
-      rating: commentRating,
-      createdAt: Date.now(),
-    });
-    setSubmittingComment(false);
-    setCommentModalEvent(null);
-  };
-
-  const handleShareEvent = async (event: IEventItem) => {
-    try {
-      await Share.share({
-        message:
-          `¡Atención! Te invitamos a nuestro próximo evento:\n\n` +
-          `🎉 ${event.title}\n\n` +
-          `📅 Fecha: ${event.date}\n` +
-          `⏰ Hora: ${event.time}\n` +
-          `📍 Lugar: ${event.location}\n\n` +
-          `${event.description || ""}\n\n`,
-      });
-    } catch (error) {
-      console.log(error);
-    }
-  };
+  const {
+    attendingLoading,
+    commentModalEvent,
+    commentRating,
+    commentText,
+    closeCommentModal,
+    date,
+    dateObj,
+    description,
+    editingId,
+    fillForm,
+    handleDateChange,
+    handleDelete,
+    handleShareEvent,
+    handleSubmit,
+    handleSubmitComment,
+    handleTimeChange,
+    handleToggleAttendance,
+    isOrganizer,
+    loading,
+    location,
+    openCommentModal,
+    pastEvents,
+    resetForm,
+    setCommentRating,
+    setCommentText,
+    setLocation,
+    setShowDatePicker,
+    setShowTimePicker,
+    setDescription,
+    setTime,
+    setTitle,
+    showDatePicker,
+    showTimePicker,
+    submittingComment,
+    time,
+    title,
+    upcomingEvents,
+    userId,
+  } = useEvents();
 
   const renderStars = (count: number, interactive = false) => (
     <View style={styles.starsRow}>
@@ -260,89 +80,102 @@ export default function EventsTabScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Formulario */}
-        <View style={styles.formCard}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              {editingId ? "Actualizar evento" : "Crear evento"}
-            </Text>
-            <Text style={styles.sectionHint}>
-              Completa la informacion principal del evento.
-            </Text>
-          </View>
-
-          <TextInput
-            placeholder="Titulo del evento"
-            placeholderTextColor={palette.muted}
-            value={title}
-            onChangeText={setTitle}
-            style={styles.input}
-          />
-
-          <View style={styles.row}>
-            <Pressable
-              style={[styles.input, styles.rowInput, styles.pickerButton]}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Text style={date ? styles.pickerText : styles.pickerPlaceholder}>
-                {date || "Fecha"}
+        {isOrganizer && (
+          <View style={styles.formCard}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>
+                {editingId ? "Actualizar evento" : "Crear evento"}
               </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.input, styles.rowInput, styles.pickerButton]}
-              onPress={() => setShowTimePicker(true)}
-            >
-              <Text style={time ? styles.pickerText : styles.pickerPlaceholder}>
-                {time || "Hora"}
+              <Text style={styles.sectionHint}>
+                Completa la informacion principal del evento.
               </Text>
-            </Pressable>
-          </View>
+            </View>
 
-          {showDatePicker && (
-            <DateTimePicker
-              value={dateObj}
-              mode="date"
-              display="default"
-              onChange={handleDateChange}
-              minimumDate={new Date()}
+            <TextInput
+              placeholder="Titulo del evento"
+              placeholderTextColor={palette.muted}
+              value={title}
+              onChangeText={setTitle}
+              style={styles.input}
+              editable={isOrganizer}
             />
-          )}
-          {showTimePicker && (
-            <DateTimePicker
-              value={dateObj}
-              mode="time"
-              display="default"
-              onChange={handleTimeChange}
-              is24Hour={true}
+
+            <View style={styles.row}>
+              <Pressable
+                style={[styles.input, styles.rowInput, styles.pickerButton]}
+                onPress={() => setShowDatePicker(true)}
+                disabled={!isOrganizer}
+              >
+                <Text
+                  style={date ? styles.pickerText : styles.pickerPlaceholder}
+                >
+                  {date || "Fecha"}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.input, styles.rowInput, styles.pickerButton]}
+                onPress={() => setShowTimePicker(true)}
+                disabled={!isOrganizer}
+              >
+                <Text
+                  style={time ? styles.pickerText : styles.pickerPlaceholder}
+                >
+                  {time || "Hora"}
+                </Text>
+              </Pressable>
+            </View>
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={dateObj}
+                mode="date"
+                display="default"
+                onChange={handleDateChange}
+                minimumDate={new Date()}
+              />
+            )}
+            {showTimePicker && (
+              <DateTimePicker
+                value={dateObj}
+                mode="time"
+                display="default"
+                onChange={handleTimeChange}
+                is24Hour={true}
+              />
+            )}
+
+            <TextInput
+              placeholder="Ubicacion"
+              placeholderTextColor={palette.muted}
+              value={location}
+              onChangeText={setLocation}
+              style={styles.input}
+              editable={isOrganizer}
             />
-          )}
+            <TextInput
+              placeholder="Descripcion"
+              placeholderTextColor={palette.muted}
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              style={[styles.input, styles.textArea]}
+              editable={isOrganizer}
+            />
 
-          <TextInput
-            placeholder="Ubicacion"
-            placeholderTextColor={palette.muted}
-            value={location}
-            onChangeText={setLocation}
-            style={styles.input}
-          />
-          <TextInput
-            placeholder="Descripcion"
-            placeholderTextColor={palette.muted}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            style={[styles.input, styles.textArea]}
-          />
-
-          <View style={styles.formActions}>
-            <Pressable style={styles.primaryButton} onPress={handleSubmit}>
-              <Text style={styles.primaryButtonText}>
-                {editingId ? "Guardar cambios" : "Crear evento"}
-              </Text>
-            </Pressable>
-            <Pressable style={styles.secondaryButton} onPress={resetForm}>
-              <Text style={styles.secondaryButtonText}>Limpiar</Text>
-            </Pressable>
+            {isOrganizer && (
+              <View style={styles.formActions}>
+                <Pressable style={styles.primaryButton} onPress={handleSubmit}>
+                  <Text style={styles.primaryButtonText}>
+                    {editingId ? "Guardar cambios" : "Crear evento"}
+                  </Text>
+                </Pressable>
+                <Pressable style={styles.secondaryButton} onPress={resetForm}>
+                  <Text style={styles.secondaryButtonText}>Limpiar</Text>
+                </Pressable>
+              </View>
+            )}
           </View>
-        </View>
+        )}
 
         {/* Eventos próximos */}
         <View style={styles.sectionHeader}>
@@ -360,7 +193,7 @@ export default function EventsTabScreen() {
               <Text style={styles.emptyText}>No hay eventos proximos.</Text>
             )}
             {upcomingEvents.map((event) => {
-              const isAttending = event.attendees?.includes(user?.uid ?? "");
+              const isAttending = event.attendees?.includes(userId ?? "");
               const attendeeCount = event.attendees?.length ?? 0;
               const isLoadingThis = attendingLoading === event.id;
 
@@ -405,25 +238,29 @@ export default function EventsTabScreen() {
                         </Text>
                       )}
                     </Pressable>
-                    <Pressable
-                      style={styles.cardAction}
-                      onPress={() => fillForm(event)}
-                    >
-                      <Text style={styles.cardActionText}>Editar</Text>
-                    </Pressable>
-                    <Pressable
-                      style={[styles.cardAction, styles.cardActionDanger]}
-                      onPress={() => handleDelete(event.id)}
-                    >
-                      <Text
-                        style={[
-                          styles.cardActionText,
-                          styles.cardActionDangerText,
-                        ]}
-                      >
-                        Eliminar
-                      </Text>
-                    </Pressable>
+                    {isOrganizer && (
+                      <>
+                        <Pressable
+                          style={styles.cardAction}
+                          onPress={() => fillForm(event)}
+                        >
+                          <Text style={styles.cardActionText}>Editar</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[styles.cardAction, styles.cardActionDanger]}
+                          onPress={() => handleDelete(event.id)}
+                        >
+                          <Text
+                            style={[
+                              styles.cardActionText,
+                              styles.cardActionDangerText,
+                            ]}
+                          >
+                            Eliminar
+                          </Text>
+                        </Pressable>
+                      </>
+                    )}
                     <Pressable
                       style={styles.shareButton}
                       onPress={() => handleShareEvent(event)}
@@ -450,7 +287,7 @@ export default function EventsTabScreen() {
             <Text style={styles.emptyText}>No hay eventos pasados.</Text>
           )}
           {pastEvents.map((event) => {
-            const attended = event.attendees?.includes(user?.uid ?? "");
+            const attended = event.attendees?.includes(userId ?? "");
             return (
               <View key={event.id} style={[styles.eventCard, styles.pastCard]}>
                 <Text style={styles.eventTitle}>{event.title}</Text>
@@ -483,7 +320,7 @@ export default function EventsTabScreen() {
         visible={!!commentModalEvent}
         transparent
         animationType="slide"
-        onRequestClose={() => setCommentModalEvent(null)}
+        onRequestClose={closeCommentModal}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -529,7 +366,7 @@ export default function EventsTabScreen() {
               </Pressable>
               <Pressable
                 style={styles.secondaryButton}
-                onPress={() => setCommentModalEvent(null)}
+                onPress={closeCommentModal}
               >
                 <Text style={styles.secondaryButtonText}>Cancelar</Text>
               </Pressable>
@@ -555,6 +392,18 @@ const styles = StyleSheet.create({
   sectionTitle: { color: palette.text, fontSize: 18, fontWeight: "800" },
   sectionHeader: { gap: 2 },
   sectionHint: { color: palette.muted, fontSize: 13 },
+  permissionBanner: {
+    backgroundColor: palette.primarySoft,
+    borderRadius: 16,
+    padding: Spacing.three,
+    gap: 4,
+  },
+  permissionTitle: { color: palette.text, fontSize: 14, fontWeight: "800" },
+  permissionText: {
+    color: palette.muted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
   input: {
     backgroundColor: "#FFFFFF",
     borderColor: palette.line,

@@ -1,10 +1,4 @@
-import {
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-} from "firebase/firestore";
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -15,63 +9,17 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { palette, Spacing } from "@/constants/theme";
-import { IEventItem } from "@/interfaces/IEvents";
-import { db } from "@/services/firebase";
-import useAuthSessionStore from "@/store/useAuthSessionStore";
-
-const eventsCollection = collection(db, "events");
-const commentsCollection = collection(db, "comments");
+import useHistory from "@/hooks/useHistory";
 
 export default function HistoryTabScreen() {
-  const user = useAuthSessionStore((state) => state.user);
-
-  const [events, setEvents] = useState<IEventItem[]>([]);
-  const [myCommentsCount, setMyCommentsCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const qEvents = query(eventsCollection, orderBy("createdAt", "desc"));
-    const unsubscribeEvents = onSnapshot(qEvents, (snapshot) => {
-      const loaded = snapshot.docs.map((d) => ({
-        id: d.id,
-        title: String(d.data().title ?? ""),
-        date: String(d.data().date ?? ""),
-        time: String(d.data().time ?? ""),
-        location: String(d.data().location ?? ""),
-        description: String(d.data().description ?? ""),
-        status: String(d.data().status ?? ""),
-        isPast: Boolean(d.data().isPast ?? false),
-        attendees: Array.isArray(d.data().attendees) ? d.data().attendees : [],
-      }));
-      setEvents(loaded);
-      setLoading(false);
-    });
-
-    const qComments = query(commentsCollection);
-    const unsubscribeComments = onSnapshot(qComments, (snapshot) => {
-      const myComments = snapshot.docs.filter(
-        (d) => d.data().userId === user?.uid,
-      );
-      setMyCommentsCount(myComments.length);
-    });
-
-    return () => {
-      unsubscribeEvents();
-      unsubscribeComments();
-    };
-  }, []);
-
-  const pastEvents = events.filter((e) => e.isPast);
-  const attendedEvents = pastEvents.filter((e) =>
-    e.attendees?.includes(user?.uid ?? ""),
-  );
-  const totalEvents = events.length;
-
-  const stats = [
-    { value: String(totalEvents), label: "Eventos totales" },
-    { value: String(attendedEvents.length), label: "Eventos asistidos" },
-    { value: String(myCommentsCount), label: "Mis comentarios" },
-  ];
+  const {
+    attendedEvents,
+    commentsByEventId,
+    isUserAttendingEvent,
+    loading,
+    pastEvents,
+    stats,
+  } = useHistory();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -112,7 +60,8 @@ export default function HistoryTabScreen() {
           <View style={styles.list}>
             {attendedEvents.length === 0 && (
               <Text style={styles.emptyText}>
-                Aun no tienes eventos en tu historial. Confirma asistencia a eventos proximos!
+                Aun no tienes eventos en tu historial. Confirma asistencia a
+                eventos proximos!
               </Text>
             )}
             {attendedEvents.map((event) => (
@@ -124,6 +73,10 @@ export default function HistoryTabScreen() {
                 {event.description ? (
                   <Text style={styles.eventDetail}>{event.description}</Text>
                 ) : null}
+                <Text style={styles.attendeeCount}>
+                  {event.attendees?.length ?? 0} asistentes confirmados ·{" "}
+                  {commentsByEventId[event.id] ?? 0} comentarios
+                </Text>
                 <Text style={styles.attendedBadge}>✓ Asististe</Text>
               </View>
             ))}
@@ -133,7 +86,9 @@ export default function HistoryTabScreen() {
         {/* Todos los eventos pasados */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Todos los eventos pasados</Text>
-          <Text style={styles.sectionHint}>Registro general de actividades</Text>
+          <Text style={styles.sectionHint}>
+            Registro general de actividades
+          </Text>
         </View>
 
         <View style={styles.list}>
@@ -141,15 +96,19 @@ export default function HistoryTabScreen() {
             <Text style={styles.emptyText}>No hay eventos pasados aun.</Text>
           )}
           {pastEvents.map((event) => {
-            const attended = event.attendees?.includes(user?.uid ?? "");
+            const attended = isUserAttendingEvent(event);
             return (
-              <View key={event.id} style={[styles.eventCard, !attended && styles.eventCardMuted]}>
+              <View
+                key={event.id}
+                style={[styles.eventCard, !attended && styles.eventCardMuted]}
+              >
                 <Text style={styles.eventTitle}>{event.title}</Text>
                 <Text style={styles.eventDetail}>
                   {event.location} · {event.date} · {event.time}
                 </Text>
                 <Text style={styles.attendeeCount}>
-                  {event.attendees?.length ?? 0} asistentes
+                  {event.attendees?.length ?? 0} asistentes ·{" "}
+                  {commentsByEventId[event.id] ?? 0} comentarios
                 </Text>
                 {attended && (
                   <Text style={styles.attendedBadge}>✓ Asististe</Text>
@@ -174,12 +133,22 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     gap: Spacing.one,
   },
-  kicker: { color: palette.primary, fontSize: 12, fontWeight: "800", letterSpacing: 1 },
-  title: { color: palette.text, fontSize: 29, lineHeight: 33, fontWeight: "800" },
+  kicker: {
+    color: palette.primary,
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  title: {
+    color: palette.text,
+    fontSize: 29,
+    lineHeight: 33,
+    fontWeight: "800",
+  },
   subtitle: { color: palette.muted, fontSize: 14, lineHeight: 20 },
-  statsRow: { flexDirection: "row", gap: Spacing.two },
+  statsRow: { flexDirection: "row", gap: Spacing.two, flexWrap: "wrap" },
   statCard: {
-    flex: 1,
+    width: "48%",
     backgroundColor: palette.primarySoft,
     borderRadius: 18,
     padding: Spacing.three,
@@ -191,7 +160,12 @@ const styles = StyleSheet.create({
   sectionTitle: { color: palette.text, fontSize: 18, fontWeight: "800" },
   sectionHint: { color: palette.muted, fontSize: 13 },
   list: { gap: Spacing.two },
-  emptyText: { color: palette.muted, fontSize: 14, textAlign: "center", paddingVertical: 12 },
+  emptyText: {
+    color: palette.muted,
+    fontSize: 14,
+    textAlign: "center",
+    paddingVertical: 12,
+  },
   eventCard: {
     backgroundColor: palette.surface,
     borderRadius: 18,
