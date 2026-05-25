@@ -3,6 +3,7 @@ import React from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -120,6 +121,38 @@ function SignUpScreen() {
                   <Text style={signUpStyles.buttonText}>Crear cuenta</Text>
                 )}
               </TouchableOpacity>
+
+              <View style={{ marginTop: 16 }}>
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: "#6B7280",
+                    textAlign: "center",
+                    lineHeight: 18,
+                  }}
+                >
+                  Al registrarte, aceptas que el contenido que publiques en la
+                  plataforma podrá compartirse bajo la licencia Creative Commons
+                  CC BY 4.0.
+                </Text>
+
+                <Text
+                  onPress={() =>
+                    Linking.openURL(
+                      "https://creativecommons.org/licenses/by/4.0/",
+                    )
+                  }
+                  style={{
+                    marginTop: 6,
+                    fontSize: 12,
+                    color: "#2563EB",
+                    textAlign: "center",
+                    textDecorationLine: "underline",
+                  }}
+                >
+                  https://creativecommons.org/licenses/by/4.0/
+                </Text>
+              </View>
             </View>
 
             <View style={signUpStyles.links}>

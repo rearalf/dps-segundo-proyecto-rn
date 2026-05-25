@@ -1,68 +1,61 @@
-# ComuniVentos 📅
+# ComuniVentos 🗓️🎊
 
 Aplicación móvil para la gestión y participación en eventos comunitarios, desarrollada con React Native y Expo.
 
-## Equipo de desarrollo
-
-- rearalf — Ricardo Recinos
-- nmendez0698 — Neris Mendez
-- MB503DatIA - Miguel Barahona
-
----
-
-## Requisitos de la aplicación
+## Características
 
 ### 1. Autenticación
+
 - Registro y acceso mediante usuario y contraseña
 - Selección de rol: Organizador o Participante
 
 ### 2. Gestión de Eventos
+
 - Crear, actualizar y eliminar eventos con fecha, hora, ubicación y descripción
 - Ver eventos próximos y pasados
 - Confirmar o cancelar asistencia a eventos
 - Contador de personas confirmadas por evento
 
 ### 3. Interacción Social
+
 - Comentarios y calificaciones por estrellas ligados a eventos específicos
 - Solo pueden comentar usuarios que confirmaron asistencia
 - Visualización de opiniones de la comunidad con nombre del evento
 
 ### 4. Historial y Estadísticas
+
 - Registro de eventos pasados a los que asistió el usuario
 - Estadísticas reales: total de eventos, eventos asistidos y comentarios
 
 ---
 
-## Mockups / Diseño UX-UI
+## Colaboradores
 
-### Login y Registro
-![Login](mockups/login.png)
-![Registro](mockups/registro.png)
+Diseño y Programación de Software multiplataforma DPS941:
 
-### Gestión de Eventos
-![Crear Evento](mockups/crear-evento.png)
-![Eventos Próximos](mockups/eventos-proximos.png)
-
-### Comunidad e Historial
-![Comunidad](mockups/comunidad.png)
-![Historial](mockups/historial.png)
+- Ricardo Ernesto Alfaro Recinos AR180405
+- Neris Moisés Méndez Díaz MD161918
+- Miguel Ángel Barahona García BG191322
 
 ---
 
 ## Instalación y ejecución
 
 1. Clonar el repositorio
+
 ```bash
    git clone https://github.com/rearalf/dps-segundo-proyecto-rn.git
    cd dps-segundo-proyecto-rn
 ```
 
 2. Instalar dependencias
+
 ```bash
    npm install --legacy-peer-deps
 ```
 
 3. Iniciar la app
+
 ```bash
    npx expo start --lan --clear
 ```
@@ -102,3 +95,15 @@ src/
 ├── services/
 └── store/
 ```
+
+---
+
+## Licenciamiento
+
+La aplicación implementa la licencia Creative Commons CC BY 4.0 para el contenido compartido dentro de la plataforma, incluyendo publicaciones, comentarios y descripciones de eventos. Los usuarios pueden compartir contenido manteniendo la atribución correspondiente según la licencia.
+
+---
+
+## Enlaces relevantes
+
+- Enlace a Mockups: https://udbedu-my.sharepoint.com/:b:/g/personal/bg191322_alumno_udb_edu_sv/IQB_Kbn86ZdBSZqklbVFDFVYAQFmRbRHv_JwnAqTPAL5vPM?e=gvgNcH
