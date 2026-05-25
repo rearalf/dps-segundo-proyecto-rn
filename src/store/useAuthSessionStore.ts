@@ -6,6 +6,7 @@ type SessionUser = {
   uid: string;
   email: string;
   displayName: string;
+  role?: number;
 };
 
 type AuthSessionState = {
