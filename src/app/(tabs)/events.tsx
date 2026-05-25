@@ -17,6 +17,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -79,7 +80,9 @@ export default function EventsTabScreen() {
   const [dateObj, setDateObj] = useState(new Date());
 
   // Modal de comentario
-  const [commentModalEvent, setCommentModalEvent] = useState<IEventItem | null>(null);
+  const [commentModalEvent, setCommentModalEvent] = useState<IEventItem | null>(
+    null,
+  );
   const [commentText, setCommentText] = useState("");
   const [commentRating, setCommentRating] = useState(0);
   const [submittingComment, setSubmittingComment] = useState(false);
@@ -124,8 +127,13 @@ export default function EventsTabScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!title.trim() || !date.trim() || !time.trim() || !location.trim()) return;
-    const normalizedIsPast = resolveIsPast(date.trim(), time.trim(), "Abierto para inscripciones");
+    if (!title.trim() || !date.trim() || !time.trim() || !location.trim())
+      return;
+    const normalizedIsPast = resolveIsPast(
+      date.trim(),
+      time.trim(),
+      "Abierto para inscripciones",
+    );
 
     if (editingId) {
       await updateDoc(doc(db, "events", editingId), {
@@ -197,7 +205,8 @@ export default function EventsTabScreen() {
   };
 
   const handleSubmitComment = async () => {
-    if (!commentText.trim() || commentRating === 0 || !commentModalEvent) return;
+    if (!commentText.trim() || commentRating === 0 || !commentModalEvent)
+      return;
     setSubmittingComment(true);
     await addDoc(commentsCollection, {
       eventId: commentModalEvent.id,
@@ -212,6 +221,22 @@ export default function EventsTabScreen() {
     setCommentModalEvent(null);
   };
 
+  const handleShareEvent = async (event: IEventItem) => {
+    try {
+      await Share.share({
+        message:
+          `¡Atención! Te invitamos a nuestro próximo evento:\n\n` +
+          `🎉 ${event.title}\n\n` +
+          `📅 Fecha: ${event.date}\n` +
+          `⏰ Hora: ${event.time}\n` +
+          `📍 Lugar: ${event.location}\n\n` +
+          `${event.description || ""}\n\n`,
+      });
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
   const renderStars = (count: number, interactive = false) => (
     <View style={styles.starsRow}>
       {[1, 2, 3, 4, 5].map((star) => (
@@ -220,7 +245,9 @@ export default function EventsTabScreen() {
           onPress={() => interactive && setCommentRating(star)}
           disabled={!interactive}
         >
-          <Text style={[styles.star, star <= count && styles.starActive]}>★</Text>
+          <Text style={[styles.star, star <= count && styles.starActive]}>
+            ★
+          </Text>
         </Pressable>
       ))}
     </View>
@@ -348,7 +375,9 @@ export default function EventsTabScreen() {
                   ) : null}
                   <Text style={styles.attendeeCount}>
                     {attendeeCount}{" "}
-                    {attendeeCount === 1 ? "persona confirmada" : "personas confirmadas"}
+                    {attendeeCount === 1
+                      ? "persona confirmada"
+                      : "personas confirmadas"}
                   </Text>
 
                   <View style={styles.cardActions}>
@@ -386,9 +415,20 @@ export default function EventsTabScreen() {
                       style={[styles.cardAction, styles.cardActionDanger]}
                       onPress={() => handleDelete(event.id)}
                     >
-                      <Text style={[styles.cardActionText, styles.cardActionDangerText]}>
+                      <Text
+                        style={[
+                          styles.cardActionText,
+                          styles.cardActionDangerText,
+                        ]}
+                      >
                         Eliminar
                       </Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.shareButton}
+                      onPress={() => handleShareEvent(event)}
+                    >
+                      <Text style={styles.shareButtonText}>📤 Compartir</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -471,10 +511,15 @@ export default function EventsTabScreen() {
               <Pressable
                 style={[
                   styles.primaryButton,
-                  (!commentText.trim() || commentRating === 0) && styles.primaryButtonDisabled,
+                  (!commentText.trim() || commentRating === 0) &&
+                    styles.primaryButtonDisabled,
                 ]}
                 onPress={handleSubmitComment}
-                disabled={submittingComment || !commentText.trim() || commentRating === 0}
+                disabled={
+                  submittingComment ||
+                  !commentText.trim() ||
+                  commentRating === 0
+                }
               >
                 {submittingComment ? (
                   <ActivityIndicator color="#fff" />
@@ -544,7 +589,12 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: { color: palette.text, fontSize: 15, fontWeight: "800" },
   list: { gap: Spacing.two },
-  emptyText: { color: palette.muted, fontSize: 14, textAlign: "center", paddingVertical: 12 },
+  emptyText: {
+    color: palette.muted,
+    fontSize: 14,
+    textAlign: "center",
+    paddingVertical: 12,
+  },
   eventCard: {
     backgroundColor: palette.surface,
     borderRadius: 18,
@@ -556,7 +606,12 @@ const styles = StyleSheet.create({
   pastCard: { opacity: 0.8 },
   eventTitle: { color: palette.text, fontSize: 17, fontWeight: "700" },
   eventDetail: { color: palette.muted, fontSize: 13, lineHeight: 18 },
-  attendeeCount: { color: palette.primary, fontSize: 12, fontWeight: "700", marginTop: 2 },
+  attendeeCount: {
+    color: palette.primary,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 2,
+  },
   cardActions: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 8 },
   attendButton: {
     borderRadius: 999,
@@ -588,7 +643,11 @@ const styles = StyleSheet.create({
     borderColor: palette.primary,
     backgroundColor: palette.primarySoft,
   },
-  commentButtonText: { color: palette.primary, fontSize: 12, fontWeight: "700" },
+  commentButtonText: {
+    color: palette.primary,
+    fontSize: 12,
+    fontWeight: "700",
+  },
   pickerButton: { justifyContent: "center" },
   pickerText: { color: palette.text, fontSize: 14 },
   pickerPlaceholder: { color: palette.muted, fontSize: 14 },
@@ -612,4 +671,16 @@ const styles = StyleSheet.create({
   star: { fontSize: 28, color: palette.line },
   starActive: { color: "#F5A623" },
   ratingHint: { color: palette.muted, fontSize: 12 },
+  shareButton: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: "#E8F1FF",
+  },
+
+  shareButtonText: {
+    color: palette.primary,
+    fontSize: 12,
+    fontWeight: "700",
+  },
 });

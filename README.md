@@ -1,56 +1,37 @@
-# Welcome to your Expo app 👋
+# ComuniVentos 🗓️🎊
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+En esta app, podrás ver los eventos a tomar lugar próximamente en tu comunidad, confirmar tu asistencia e interactuar con los demás usuarios de esta app.
 
-## Get started
+### Características
 
-1. Install dependencies
+Organizadores:
 
-   ```bash
-   npm install
-   ```
+- Creación y gestión de eventos
+- Visualización de estadísticas
 
-2. Start the app
+Usuarios de la comunidad:
 
-   ```bash
-   npx expo start
-   ```
+- Visualización de eventos futuros y pasados
+- Interacción con los eventos: Confirmación de asistencia
+- Interacción comunitaria: Comentarios y ratings de la comunidad y compartir en redes y otros medios
 
-In the output, you'll find options to open the app in a
+## Tecnologías utilizadas 💻
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- React Native: Framework basado en React para el desarrollo de aplicaciones móviles multiplataforma.
+- Firebase: Control de usuarios y bases de datos.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Colaboradores
 
-## Get a fresh project
+Diseño y Programación de Software multiplataforma DPS941:
 
-When you're ready, run:
+- Ricardo Ernesto Alfaro Recinos AR180405
+- Neris Moisés Méndez Díaz MD161918
+- Miguel Ángel Barahona García BG191322
 
-```bash
-npm run reset-project
-```
+## Licenciamiento
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+La aplicación implementa la licencia Creative Commons CC BY 4.0 para el contenido compartido dentro de la plataforma, incluyendo publicaciones, comentarios y descripciones de eventos. Los usuarios pueden compartir contenido manteniendo la atribución correspondiente según la licencia.
 
-### Other setup steps
+## Enlaces relevantes
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- Enlace a Mockups: https://udbedu-my.sharepoint.com/:b:/g/personal/bg191322_alumno_udb_edu_sv/IQB_Kbn86ZdBSZqklbVFDFVYAQFmRbRHv_JwnAqTPAL5vPM?e=gvgNcH
