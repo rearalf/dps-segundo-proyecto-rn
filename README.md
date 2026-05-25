@@ -1,56 +1,104 @@
-# Welcome to your Expo app 👋
+# ComuniVentos 📅
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Aplicación móvil para la gestión y participación en eventos comunitarios, desarrollada con React Native y Expo.
 
-## Get started
+## Equipo de desarrollo
 
-1. Install dependencies
+- rearalf — Ricardo Recinos
+- nmendez0698 — Neris Mendez
+- MB503DatIA - Miguel Barahona
 
-   ```bash
-   npm install
-   ```
+---
 
-2. Start the app
+## Requisitos de la aplicación
 
-   ```bash
-   npx expo start
-   ```
+### 1. Autenticación
+- Registro y acceso mediante usuario y contraseña
+- Selección de rol: Organizador o Participante
 
-In the output, you'll find options to open the app in a
+### 2. Gestión de Eventos
+- Crear, actualizar y eliminar eventos con fecha, hora, ubicación y descripción
+- Ver eventos próximos y pasados
+- Confirmar o cancelar asistencia a eventos
+- Contador de personas confirmadas por evento
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### 3. Interacción Social
+- Comentarios y calificaciones por estrellas ligados a eventos específicos
+- Solo pueden comentar usuarios que confirmaron asistencia
+- Visualización de opiniones de la comunidad con nombre del evento
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### 4. Historial y Estadísticas
+- Registro de eventos pasados a los que asistió el usuario
+- Estadísticas reales: total de eventos, eventos asistidos y comentarios
 
-## Get a fresh project
+---
 
-When you're ready, run:
+## Mockups / Diseño UX-UI
 
+### Login y Registro
+![Login](mockups/login.png)
+![Registro](mockups/registro.png)
+
+### Gestión de Eventos
+![Crear Evento](mockups/crear-evento.png)
+![Eventos Próximos](mockups/eventos-proximos.png)
+
+### Comunidad e Historial
+![Comunidad](mockups/comunidad.png)
+![Historial](mockups/historial.png)
+
+---
+
+## Instalación y ejecución
+
+1. Clonar el repositorio
 ```bash
-npm run reset-project
+   git clone https://github.com/rearalf/dps-segundo-proyecto-rn.git
+   cd dps-segundo-proyecto-rn
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+2. Instalar dependencias
+```bash
+   npm install --legacy-peer-deps
+```
 
-### Other setup steps
+3. Iniciar la app
+```bash
+   npx expo start --lan --clear
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+4. Escanear el QR con **Expo Go SDK 55** desde tu celular
 
-## Learn more
+---
 
-To learn more about developing your project with Expo, look at the following resources:
+## Tecnologías utilizadas
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+- React Native + Expo SDK 55
+- Expo Router (navegación)
+- Firebase Firestore (base de datos en tiempo real)
+- Firebase Auth (autenticación)
+- Zustand (manejo de estado)
+- TypeScript
 
-## Join the community
+---
 
-Join our community of developers creating universal apps.
+## Estructura del proyecto
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```
+src/
+├── app/
+│   ├── (tabs)/
+│   │   ├── events.tsx      # Gestión y asistencia a eventos
+│   │   ├── community.tsx   # Comentarios y calificaciones
+│   │   ├── history.tsx     # Historial y estadísticas
+│   │   └── _layout.tsx
+│   ├── signin.tsx
+│   ├── signup.tsx
+│   └── _layout.tsx
+├── components/
+├── constants/
+├── hooks/
+├── interfaces/
+├── services/
+└── store/
+```
