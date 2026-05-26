@@ -46,7 +46,7 @@ export function useSignUp() {
         uid: user.uid,
         email: user.email ?? email.trim(),
         displayName: name.trim(),
-        role: 1,
+        role: 2,
       });
 
       router.replace("/(tabs)" as never);
